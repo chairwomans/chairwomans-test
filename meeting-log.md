@@ -26,7 +26,7 @@
         - 기존 멀티모달 도메인 적응은 매우 비효율적이며, 성능 향상이 제한적임
     - 내용
         - Vision-Language Model (VLM)에서의 도메인 적응 연구 → CLIP
-        - Test-time Prompt Tuning (TPT) 류의 ~~를 baseline 으로 두고 실험 진행
+        - Test-time Prompt Tuning (TPT) 류의 연구를 baseline 으로 두고 실험 진행
         - Training-free 기술 연구
         - 베이스라인 대비 성능 비교 및 논문 작성
 2. 지난 학기 진행 사항 내용 구성
@@ -36,7 +36,7 @@
 3. 이번 학기 진행 계획 내용 구성
     - 도메인 추정 기반 최종 분류 파이프라인 고도화
     - ablation study 진행
-    - B-16 B-32 L-14 ViT 임베딩 모델? 별 실험
+    - ViT B-16 B-32 L-14 실험
     - 데이터셋 전체 실험
     - 베이스라인 실험
     - 논문 작성
