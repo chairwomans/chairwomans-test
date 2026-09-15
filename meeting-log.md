@@ -78,3 +78,32 @@
 2. 면담 전까지 할 일
    - 코드 정리
    - 방법론 최종 확정
+
+---
+  
+## 2026-09-15
+
+참석자: 설영은, 신지민, 윤희서
+
+#### 최종 파이프라인 확정 및 벤치마크 테스트 일정 수립
+1. 벤치마크 테스트 (ViT-B/16)
+   - ImageNet 계열
+       - ImageNet
+       - -A
+       - -V2
+       - -R
+       - -Sketch
+   - 10 fine-grained classification datasets
+       - SUN397
+       - Aircraft
+       - EuroSAT
+       - Cars
+       - Food101
+       - Pets
+       - Flower102
+       - Caltech101
+       - DTD
+       - UCF101
+2. 백본 테스트 - ViT-B/16, ViT-B/32, ViT-L/14
+3. 베이스라인 - CLIP, TPT, CoOp => 우선 기존 논문 참고해서 성능 체크한 후, 백본 테스트까지 모두 끝난 뒤 직접 코드 돌려보기로 확정
+<img width="1367" height="665" alt="image" src="https://github.com/user-attachments/assets/7b0cea04-9965-45d6-a2db-e38563ee0cbb" />
