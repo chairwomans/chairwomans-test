@@ -107,3 +107,20 @@
 2. 백본 테스트 - ViT-B/16, ViT-B/32, ViT-L/14
 3. 베이스라인 - CLIP, TPT, CoOp => 우선 기존 논문 참고해서 성능 체크한 후, 백본 테스트까지 모두 끝난 뒤 직접 코드 돌려보기로 확정
 <img width="1367" height="665" alt="image" src="https://github.com/user-attachments/assets/7b0cea04-9965-45d6-a2db-e38563ee0cbb" />
+
+---
+  
+## 2026-09-17
+
+참석자: 설영은, 신지민, 윤희서
+
+#### 벤치마크 테스트 방법 확정
+1. 벤치마크 테스트 방법으로는 CoOp 방식과 CLIP-benchmark 방식이 있음
+   - 선행 연구들에서 실제로 사용된 방식 확인
+       - Frolic의 경우 정확히 제시되어 있지 않음
+       - TDA의 경우 CoOp 방식을 활용한 것으로 확인
+   - 최종적으로 CoOp 방식으로 확정
+2. 테스트 레포 구성
+   - HP 오멘 노트북을 학과 사무실에서 빌려, GPU 환경에서 돌리기 위한 레포 구성
+3. ImageNet 사용 권한 획득
+   - 해당 데이터셋은 validation set 사용 
