@@ -1,0 +1,3 @@
+# Final 7-dataset benchmark: Flowers102
+DATASET:
+  NAME: "OxfordFlowers"

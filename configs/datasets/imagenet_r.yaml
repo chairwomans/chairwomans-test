@@ -1,0 +1,3 @@
+# Final 7-dataset benchmark: ImageNet-R
+DATASET:
+  NAME: "ImageNetR"

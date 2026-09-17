@@ -1,0 +1,3 @@
+# Final 7-dataset benchmark: ImageNet-Sketch
+DATASET:
+  NAME: "ImageNetSketch"

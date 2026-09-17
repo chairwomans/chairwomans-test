@@ -1,0 +1,3 @@
+# Final 7-dataset benchmark: ImageNet-V2
+DATASET:
+  NAME: "ImageNetV2"

@@ -1,0 +1,3 @@
+# CoOp dataset configuration
+DATASET:
+  NAME: "UCF101"
