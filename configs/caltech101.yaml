@@ -5,4 +5,4 @@ recenter:
   beta: 0.0
 
 style:
-  lambda: 0.0
+  lambda: 1.0
