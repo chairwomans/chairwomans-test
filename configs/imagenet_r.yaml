@@ -1,3 +1,8 @@
-# Final 7-dataset benchmark: ImageNet-R
-DATASET:
-  NAME: "ImageNetR"
+# Configuration for Hyperparameters
+
+recenter:
+  K: 15
+  beta: 0.35
+
+style:
+  lambda: 0.0

@@ -1,3 +1,8 @@
-# Final 7-dataset benchmark: DTD
-DATASET:
-  NAME: "DescribableTextures"
+# Configuration for Hyperparameters
+
+recenter:
+  K: 2
+  beta: 0.5
+
+style:
+  lambda: 0.0

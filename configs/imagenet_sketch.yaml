@@ -1,3 +1,8 @@
-# Final 7-dataset benchmark: ImageNet-Sketch
-DATASET:
-  NAME: "ImageNetSketch"
+# Configuration for Hyperparameters
+
+recenter:
+  K: 10
+  beta: 0.5
+
+style:
+  lambda: 1.0

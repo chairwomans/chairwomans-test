@@ -1,3 +1,8 @@
-# Final 7-dataset benchmark: ImageNet-V2
-DATASET:
-  NAME: "ImageNetV2"
+# Configuration for Hyperparameters
+
+recenter:
+  K: null
+  beta: 0.0
+
+style:
+  lambda: 1.0

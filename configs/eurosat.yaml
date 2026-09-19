@@ -1,3 +1,8 @@
-# CoOp dataset configuration
-DATASET:
-  NAME: "EuroSAT"
+# Configuration for Hyperparameters
+
+recenter:
+  K: 1
+  beta: 0.5
+
+style:
+  lambda: 0.0
