@@ -62,7 +62,7 @@ def main():
     config = args.config
     device = "cuda" if torch.cuda.is_available() else "cpu"
     if device != "cuda":
-        raise RuntimeError("ImageNet tuning requires CUDA")
+        raise RuntimeError("Hyperparameter tuning requires CUDA")
 
     dataset_id, dataset, _ = load_evaluation_dataset(data_root, config)
     items = dataset.test
