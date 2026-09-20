@@ -2,7 +2,7 @@
 
 recenter:
   K: 1
-  beta: 0.5
+  beta: 0.53
 
 style:
   lambda: 0.0

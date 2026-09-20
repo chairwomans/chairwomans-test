@@ -1,8 +1,8 @@
 # Configuration for Hyperparameters
 
 recenter:
-  K: 1
-  beta: 0.280
+  K: 6
+  beta: 0.26
 
 style:
   lambda: 0.0
