@@ -1,0 +1,8 @@
+# Configuration for Hyperparameters
+
+recenter:
+  K: 15
+  beta: 0.190
+
+style:
+  lambda: 0.875
