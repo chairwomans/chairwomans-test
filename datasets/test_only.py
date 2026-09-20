@@ -1,4 +1,4 @@
-"""TDA-style local loaders that expose only each dataset's official test set."""
+"""TDA-style local loaders for the fixed dataset splits used by this project."""
 
 from pathlib import Path
 
@@ -24,17 +24,17 @@ _IMAGENET_VARIANTS = {
 }
 
 
-class TestOnlyDataset(DatasetBase):
-    def __init__(self, name, test):
+class LocalDataset(DatasetBase):
+    def __init__(self, name, test, val=None, train=None):
         self.name = name
-        super().__init__(test=test)
+        super().__init__(test=test, val=val, train=train)
 
 
-def _read_split(split_path, image_root):
+def _read_split(split_path, image_root, split):
     values = read_json(split_path)
     return [
         Datum(str(Path(image_root) / impath), int(label), classname)
-        for impath, label, classname in values["test"]
+        for impath, label, classname in values[split]
     ]
 
 
@@ -53,7 +53,7 @@ def _folder_dataset(name, image_root, classnames):
         folder_path = Path(image_root) / folder
         for filename in listdir_nohidden(folder_path, sort=True):
             items.append(Datum(str(folder_path / filename), label, classnames[folder]))
-    return TestOnlyDataset(name, items)
+    return LocalDataset(name, items)
 
 
 def _load_imagenet(root):
@@ -72,7 +72,7 @@ def _load_imagenetv2(root):
         class_root = image_root / str(label)
         for filename in listdir_nohidden(class_root, sort=True):
             items.append(Datum(str(class_root / filename), label, names[folder]))
-    return TestOnlyDataset("ImageNetV2", items)
+    return LocalDataset("ImageNetV2", items)
 
 
 def _load_imagenet_variant(config_name, root):
@@ -82,19 +82,28 @@ def _load_imagenet_variant(config_name, root):
     return _folder_dataset(name, dataset_root / image_dir, names)
 
 
+def _read_fgvc_split(dataset_root, split, label_by_name):
+    items = []
+    for line in (dataset_root / f"images_variant_{split}.txt").read_text(encoding="utf-8").splitlines():
+        image_id, classname = line.split(" ", 1)
+        items.append(Datum(str(dataset_root / "images" / f"{image_id}.jpg"), label_by_name[classname], classname))
+    return items
+
+
 def _load_fgvc(root):
     dataset_root = Path(root) / "fgvc_aircraft"
     classnames = (dataset_root / "variants.txt").read_text(encoding="utf-8").splitlines()
     label_by_name = {name: index for index, name in enumerate(classnames)}
-    items = []
-    for line in (dataset_root / "images_variant_test.txt").read_text(encoding="utf-8").splitlines():
-        image_id, classname = line.split(" ", 1)
-        items.append(Datum(str(dataset_root / "images" / f"{image_id}.jpg"), label_by_name[classname], classname))
-    return TestOnlyDataset("FGVCAircraft", items)
+    return LocalDataset(
+        "FGVCAircraft",
+        test=_read_fgvc_split(dataset_root, "test", label_by_name),
+        val=_read_fgvc_split(dataset_root, "val", label_by_name),
+        train=_read_fgvc_split(dataset_root, "train", label_by_name),
+    )
 
 
 def build_dataset(config_name, root):
-    """Build the fixed official test split for one config filename."""
+    """Build fixed splits for one dataset config filename."""
     if config_name == "imagenet":
         return _load_imagenet(root)
     if config_name == "imagenetv2":
@@ -108,4 +117,10 @@ def build_dataset(config_name, root):
     except KeyError as error:
         raise KeyError(f"No local test loader for dataset config: {config_name}") from error
     dataset_root = Path(root) / dataset_dir
-    return TestOnlyDataset(name, _read_split(dataset_root / split_file, dataset_root / image_dir))
+    split_path = dataset_root / split_file
+    return LocalDataset(
+        name,
+        test=_read_split(split_path, dataset_root / image_dir, "test"),
+        val=_read_split(split_path, dataset_root / image_dir, "val"),
+        train=_read_split(split_path, dataset_root / image_dir, "train"),
+    )

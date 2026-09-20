@@ -13,10 +13,12 @@ class Datum:
 
 
 class DatasetBase:
-    def __init__(self, test):
+    def __init__(self, test, val=None, train=None):
         if not test:
             raise ValueError("The official test split is empty.")
         self.test = test
+        self.val = val or []
+        self.train = train or []
 
 
 def read_json(path):

@@ -1,4 +1,4 @@
-"""Create deterministic CLIP image-feature caches for one evaluation dataset."""
+"""Create deterministic CLIP image-feature caches for one dataset split."""
 
 import argparse
 import json
@@ -34,6 +34,7 @@ def main():
     parser.add_argument("--data-root", required=True, type=Path)
     parser.add_argument("--dataset", required=True, help="Dataset config stem, e.g. eurosat")
     parser.add_argument("--backbone", default="ViT-B/16")
+    parser.add_argument("--split", choices=("test", "val"), default="test")
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
@@ -46,11 +47,13 @@ def main():
         raise RuntimeError(f"RTX 3070 GPU required, but cuda:0 is {gpu_name!r}.")
 
     dataset = build_dataset(args.dataset, args.data_root)
-    items = dataset.test
+    items = getattr(dataset, args.split)
     if not items:
-        raise ValueError(f"{args.dataset} has an empty test split")
+        raise ValueError(f"{args.dataset} has an empty {args.split} split")
 
     cache_dir = args.data_root / "cache" / args.backbone.replace("/", "-") / args.dataset
+    if args.split != "test":
+        cache_dir = cache_dir / args.split
     cache_dir.mkdir(parents=True, exist_ok=True)
     outputs = [cache_dir / "raw.pt", cache_dir / "avg.pt", cache_dir / "metadata.json"]
     if not args.overwrite and any(path.exists() for path in outputs):
@@ -75,6 +78,7 @@ def main():
     metadata = {
         "dataset": args.dataset,
         "dataset_name": dataset.name,
+        "split": args.split,
         "backbone": args.backbone,
         "device": gpu_name,
         "feature_dtype": "float16",

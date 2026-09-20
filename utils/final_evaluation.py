@@ -59,21 +59,24 @@ def _open_images(items, indices):
     return images
 
 
-def _cache_directory(data_root, model_name, dataset_config):
+def _cache_directory(data_root, model_name, dataset_config, split="test"):
     """Return the cache location associated with one backbone and config stem."""
     cache_backbone = model_name.replace("/", "-")
-    return Path(data_root) / "cache" / cache_backbone / Path(dataset_config).stem
+    directory = Path(data_root) / "cache" / cache_backbone / Path(dataset_config).stem
+    return directory if split == "test" else directory / split
 
 
-def _load_cached_avg(data_root, model_name, dataset_config, items, device):
+def _load_cached_avg(data_root, model_name, dataset_config, items, device, split="test"):
     """Load a compatible cached flip-average feature matrix, if it exists."""
-    cache_dir = _cache_directory(data_root, model_name, dataset_config)
+    cache_dir = _cache_directory(data_root, model_name, dataset_config, split)
     avg_path = cache_dir / "avg.pt"
     metadata_path = cache_dir / "metadata.json"
     if not avg_path.is_file() or not metadata_path.is_file():
         return None
 
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    if metadata.get("split", "test") != split:
+        raise ValueError(f"Cache split mismatch in {cache_dir}: expected {split}")
     if metadata.get("backbone") != model_name:
         raise ValueError(
             f"Cache backbone mismatch in {cache_dir}: "
@@ -150,11 +153,11 @@ def _fit_recenter(embeds, seed, n_clusters):
     return recenter
 
 
-def run_dataset(model, preprocess, data_root, dataset_config, model_name, device, batch_size=64):
+def run_dataset(model, preprocess, data_root, dataset_config, model_name, device, batch_size=64, split="test"):
     dataset_id, dataset, settings = load_evaluation_dataset(data_root, dataset_config)
-    items = dataset.test
+    items = getattr(dataset, split)
     if not items:
-        raise ValueError(f"CoOp dataset has no usable test split: {dataset_id}")
+        raise ValueError(f"Dataset has no usable {split} split: {dataset_id}")
     # Some ImageNet-derived datasets omit classes but retain their original
     # ImageNet label IDs (e.g. 0, 1, 3, ...).  Build prototypes in label order
     # and remap their sparse IDs to the contiguous prototype indices.
@@ -167,7 +170,7 @@ def run_dataset(model, preprocess, data_root, dataset_config, model_name, device
     text_proto = _text_proto(model, names, prompt_templates, device)
     if settings.style_lambda > 0:
         text_bank, style_proto, style_class_proto = _style_banks(model, names, prompt_templates, device)
-    avg = _load_cached_avg(data_root, model_name, dataset_config, items, device)
+    avg = _load_cached_avg(data_root, model_name, dataset_config, items, device, split)
     if avg is None:
         original, mirrored = [], []
         for start in tqdm(range(0, len(items), batch_size), desc=f"{dataset_id} test", leave=False):
@@ -209,12 +212,12 @@ def run_dataset(model, preprocess, data_root, dataset_config, model_name, device
     return {"dataset": dataset_id, "final": float((final_pred == labels).mean() * 100)}
 
 
-def run_final_evaluation(model_name, data_root, dataset_config):
+def run_final_evaluation(model_name, data_root, dataset_config, split="test"):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model, preprocess = clip.load(model_name, device=device)
     model.eval()
     results = [run_dataset(
-        model, preprocess, data_root, dataset_config, model_name, device,
+        model, preprocess, data_root, dataset_config, model_name, device, split=split,
     )]
     print("\n" + "=" * 30)
     print(f"{'dataset':<18}{'FINAL':>12}")
