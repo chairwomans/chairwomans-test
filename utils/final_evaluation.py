@@ -15,15 +15,6 @@ import clip
 from utils.dataset_setup import load_evaluation_dataset
 from utils import templates
 
-STYLE_SPECS = [("photo", "a real photograph", "a photo of a {}"),
-               ("painting", "a painting", "a painting of a {}"),
-               ("cartoon", "a cartoon illustration", "a cartoon of a {}"),
-               ("sketch", "a sketch", "a sketch of a {}"),
-               ("line_drawing", "a line drawing", "a line drawing of a {}"),
-               ("digital_illustration", "a digital illustration", "a digital illustration of a {}"),
-               ("3d_render", "a 3d rendered image", "a 3d rendering of a {}"),
-               ("sculpture", "a sculpture", "a sculpture of a {}")]
-
 _TEMPLATES_BY_DATASET = {
     "ImageNet": templates.imagenet_templates,
     "ImageNetA": templates.imagenet_templates,
@@ -113,31 +104,23 @@ def _dataset_templates(dataset_name):
         raise KeyError(f"No prompt templates registered for CoOp dataset: {dataset_name}") from error
 
 
-def _text_proto(model, class_names, prompt_templates, device):
+def _text_proto(model, class_names, prompt_templates, device, prompt_batch_size=128):
+    """Encode template ensembles in batches while preserving per-class averaging."""
     rows = []
-    for name in tqdm(class_names, desc="text prototypes"):
-        tokens = clip.tokenize([t.format(name.replace("_", " ")) for t in prompt_templates], truncate=True).to(device)
+    templates_per_class = len(prompt_templates)
+    classes_per_batch = max(1, prompt_batch_size // templates_per_class)
+    for start in tqdm(range(0, len(class_names), classes_per_batch), desc="text prototypes"):
+        names = class_names[start:start + classes_per_batch]
+        prompts = [
+            template.format(name.replace("_", " "))
+            for name in names
+            for template in prompt_templates
+        ]
+        tokens = clip.tokenize(prompts, truncate=True).to(device)
         with torch.no_grad():
-            rows.append(F.normalize(model.encode_text(tokens).float().mean(0), dim=0))
-    return torch.stack(rows)
-
-
-def _style_banks(model, class_names, prompt_templates, device):
-    text_bank = []
-    for name in tqdm(class_names, desc="template bank"):
-        tokens = clip.tokenize([t.format(name.replace("_", " ")) for t in prompt_templates], truncate=True).to(device)
-        with torch.no_grad():
-            text_bank.append(F.normalize(model.encode_text(tokens).float(), dim=-1))
-    text_bank = torch.stack(text_bank)
-    style_tokens = clip.tokenize([row[1] for row in STYLE_SPECS], truncate=True).to(device)
-    with torch.no_grad():
-        style_proto = F.normalize(model.encode_text(style_tokens).float(), dim=-1)
-    style_class_proto = []
-    for _, _, template in STYLE_SPECS:
-        tokens = clip.tokenize([template.format(name.replace("_", " ")) for name in class_names], truncate=True).to(device)
-        with torch.no_grad():
-            style_class_proto.append(F.normalize(model.encode_text(tokens).float(), dim=-1))
-    return text_bank, style_proto, torch.stack(style_class_proto)
+            embeddings = model.encode_text(tokens).float().reshape(len(names), templates_per_class, -1)
+        rows.append(F.normalize(embeddings.mean(1), dim=-1))
+    return torch.cat(rows)
 
 
 def _fit_recenter(embeds, seed, n_clusters):
@@ -151,6 +134,31 @@ def _fit_recenter(embeds, seed, n_clusters):
         probs = torch.tensor(gmm.predict_proba(pca.transform(values.detach().cpu().numpy() - mean_np)), device=values.device, dtype=values.dtype)
         return F.normalize(values - beta * (probs @ means), dim=-1)
     return recenter
+
+
+def _load_cached_raw(data_root, model_name, dataset_config, items, device, split):
+    """Load normalized, non-flip image features after cache compatibility checks."""
+    # _load_cached_avg validates the metadata and item ordering shared by raw.pt.
+    _load_cached_avg(data_root, model_name, dataset_config, items, device, split)
+    raw_path = _cache_directory(data_root, model_name, dataset_config, split) / "raw.pt"
+    if not raw_path.is_file():
+        raise FileNotFoundError(f"Raw feature cache is missing: {raw_path}")
+    raw = torch.load(raw_path, map_location=device, weights_only=True).float()
+    if raw.ndim != 2 or raw.shape[0] != len(items):
+        raise ValueError(f"Invalid cached raw feature shape {tuple(raw.shape)} in {raw_path}")
+    return F.normalize(raw, dim=-1)
+
+
+def _confidence_prior(logits):
+    """Return the confidence-weighted class-prior logit correction."""
+    probabilities = F.softmax(logits, dim=-1)
+    entropy = -(probabilities * torch.log(probabilities.clamp_min(1e-12))).sum(dim=-1)
+    confidence = 1.0 - entropy / np.log(probabilities.shape[1])
+    prior = (confidence[:, None] * probabilities).sum(dim=0)
+    prior = (prior / confidence.sum().clamp_min(1e-12)).clamp_min(1e-12)
+    prior = prior / prior.sum()
+    correction = -torch.log(prior)
+    return prior, correction - correction.mean()
 
 
 def run_dataset(model, preprocess, data_root, dataset_config, model_name, device, batch_size=64, split="test"):
@@ -168,8 +176,6 @@ def run_dataset(model, preprocess, data_root, dataset_config, model_name, device
     label_to_index = {label: index for index, label in enumerate(label_to_name)}
     prompt_templates = _dataset_templates(dataset_id)
     text_proto = _text_proto(model, names, prompt_templates, device)
-    if settings.style_lambda > 0:
-        text_bank, style_proto, style_class_proto = _style_banks(model, names, prompt_templates, device)
     avg = _load_cached_avg(data_root, model_name, dataset_config, items, device, split)
     if avg is None:
         original, mirrored = [], []
@@ -178,38 +184,23 @@ def run_dataset(model, preprocess, data_root, dataset_config, model_name, device
             original.append(_encode(model, preprocess, batch, device))
             mirrored.append(_encode(model, preprocess, [image.transpose(Image.Transpose.FLIP_LEFT_RIGHT) for image in batch], device))
         avg = F.normalize((torch.cat(original) + torch.cat(mirrored)) / 2, dim=-1)
+    # Hyperparameters and the prior are fit only from validation features.
+    fit_items = getattr(dataset, "val", None) or items
+    fit_split = "val" if getattr(dataset, "val", None) else split
+    fit_avg = _load_cached_avg(data_root, model_name, dataset_config, fit_items, device, fit_split)
+    if fit_avg is None:
+        raise FileNotFoundError(f"Feature cache is required for the fitting split ({fit_split})")
     if settings.n_clusters is None:
-        rec = avg
+        recenter = lambda values, beta: F.normalize(values, dim=-1)
     else:
-        recenter = _fit_recenter(avg, seed=42, n_clusters=settings.n_clusters)
-        rec = recenter(avg, settings.beta)
-    rm_logits = rec @ text_proto.t() * 100
-    rm_prob = F.softmax(rm_logits, dim=-1)
-    if settings.style_lambda == 0:
-        final_prob = rm_prob
-    else:
-        top2 = rm_logits.topk(2, dim=-1).indices
-        support = []
-        for start in range(0, len(rec), batch_size):
-            emb = rec[start:start + batch_size]
-            t1, t2 = text_bank[top2[start:start + batch_size, 0]], text_bank[top2[start:start + batch_size, 1]]
-            s1 = torch.einsum("bd,bmd->bm", emb, t1)
-            s2 = torch.einsum("bd,bmd->bm", emb, t2)
-            support.append((s1 > s2).float().mean(-1))
-        uncertainty = 1 - torch.cat(support)
-        style_weights = F.softmax(avg @ style_proto.t() * 100, dim=-1)
-        style_prob = []
-        for start in range(0, len(rec), batch_size):
-            emb = rec[start:start + batch_size]
-            logits = torch.einsum("bd,skd->bsk", emb, style_class_proto) * 100
-            per_style = F.softmax(logits, dim=-1)
-            style_prob.append((per_style * style_weights[start:start + batch_size].unsqueeze(-1)).sum(1))
-        style_prob = torch.cat(style_prob)
-        weight = settings.style_lambda * uncertainty[:, None]
-        final_prob = (1 - weight) * rm_prob + weight * style_prob
-    final_pred = final_prob.argmax(-1).cpu().numpy()
+        recenter = _fit_recenter(fit_avg, seed=42, n_clusters=settings.n_clusters)
+    rec = recenter(avg, settings.beta)
+    fit_raw = _load_cached_raw(data_root, model_name, dataset_config, fit_items, device, fit_split)
+    prior_logits = recenter(fit_raw, settings.beta) @ text_proto.t() * 100
+    _, correction = _confidence_prior(prior_logits)
+    final_pred = (rec @ text_proto.t() * 100 + correction).argmax(-1).cpu().numpy()
     labels = np.array([label_to_index[item.label] for item in items])
-    return {"dataset": dataset_id, "final": float((final_pred == labels).mean() * 100)}
+    return {"dataset": dataset_id, "final": float((final_pred == labels).mean() * 100), "fit_split": fit_split}
 
 
 def run_final_evaluation(model_name, data_root, dataset_config, split="test"):

@@ -24,21 +24,16 @@ _REQUIRED_SPLIT_FILES = {
 class PipelineSettings:
     n_clusters: int | None
     beta: float
-    style_lambda: float
 
 
 def _load_settings(config_path):
     values = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
     recenter = values.get("recenter", {})
-    style = values.get("style", {})
     n_clusters = recenter.get("K")
     if n_clusters is not None and (not isinstance(n_clusters, int) or n_clusters < 1):
         raise ValueError(f"recenter.K must be a positive integer or null: {config_path}")
     beta = float(recenter.get("beta", 0.0))
-    style_lambda = float(style.get("lambda", 0.0))
-    if not 0.0 <= style_lambda <= 1.0:
-        raise ValueError(f"style.lambda must be between 0 and 1: {config_path}")
-    return PipelineSettings(n_clusters=n_clusters, beta=beta, style_lambda=style_lambda)
+    return PipelineSettings(n_clusters=n_clusters, beta=beta)
 
 
 def load_evaluation_dataset(data_root, dataset_config):
