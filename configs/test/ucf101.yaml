@@ -3,6 +3,3 @@
 recenter:
   K: 20
   beta: 0.135
-
-style:
-  lambda: 1.0
