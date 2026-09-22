@@ -1,5 +1,0 @@
-# Configuration for Hyperparameters
-
-recenter:
-  K: 18
-  beta: 0.220
