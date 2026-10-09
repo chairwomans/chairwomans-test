@@ -10,11 +10,10 @@ prototype is built from `(domain phrase, dataset template)` pairs, e.g.
 `"a cartoon image, a photo of a {}, a type of aircraft."`. No training or
 fine-tuning is involved — it's zero-shot CLIP with input-conditional prompt routing.
 
-The full cross product of domain phrases × dataset templates can get huge
-(ImageNet's 80 templates × 20 domain phrases = 1600 prompts per class), which
-would mean way too many CLIP text encodes per class. So prompts are capped
-at `--max-prompts` (default 40) by taking an evenly-spaced subset of that
-cross product, instead of encoding every combination.
+Every one of a dataset's own templates is combined with every domain phrase.
+ImageNet-family datasets use CLIP's 80-template ensemble, so that's 1600
+prompts per class -- currently only run with `--datasets imagenet-only` or
+`all`, since it's much slower than the no-imagenet datasets.
 
 ## Setup
 
@@ -34,9 +33,9 @@ python run_final_evaluation.py --data-root ./data --backbone ViT-B/16 --datasets
 ```
 
 Options:
-- `--datasets` — comma-separated dataset names, or `all` (default)
+- `--datasets` — comma-separated dataset names, or a preset: `all` (default),
+  `no-imagenet`, `imagenet-only`
 - `--backbone` — `ViT-B/16` (default) / `ViT-B/32` / `ViT-L/14`
-- `--max-prompts` — cap on combined prompts per class per domain (default 40)
 - `--dry-run` — just validate the caches exist, without loading CLIP
 
 Or via the wrapper scripts: `scripts/run_final_evaluation.sh` / `.ps1`.

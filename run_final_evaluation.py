@@ -11,11 +11,18 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from utils.final_evaluation import run_domain_hint_templated
 
-DEFAULT_DATASETS = [
+NON_IMAGENET_DATASETS = [
     "caltech101", "dtd", "eurosat", "fgvc_aircraft", "food101",
     "oxford_flowers", "oxford_pets", "stanford_cars", "sun397", "ucf101",
-    "imagenet", "imagenetv2", "imagenet_a", "imagenet_r", "imagenet_sketch",
 ]
+IMAGENET_DATASETS = ["imagenet", "imagenetv2", "imagenet_a", "imagenet_r", "imagenet_sketch"]
+DEFAULT_DATASETS = NON_IMAGENET_DATASETS + IMAGENET_DATASETS
+
+DATASET_PRESETS = {
+    "all": DEFAULT_DATASETS,
+    "no-imagenet": NON_IMAGENET_DATASETS,
+    "imagenet-only": IMAGENET_DATASETS,
+}
 
 
 def main():
@@ -24,19 +31,21 @@ def main():
                      "dataset's own CLIP prompt templates."
     )
     parser.add_argument("--datasets", default="all",
-                        help="Comma-separated cached datasets, or 'all' (default)")
+                        help="Comma-separated cached datasets, or a preset: "
+                             + ", ".join(DATASET_PRESETS))
     parser.add_argument("--backbone", default="ViT-B/16",
                         choices=["ViT-B/16", "ViT-B/32", "ViT-L/14"])
     parser.add_argument("--data-root", type=Path, default=PROJECT_ROOT / "data")
     parser.add_argument("--batch-size", type=int, default=512)
-    parser.add_argument("--max-prompts", type=int, default=40,
-                        help="Cap on combined (domain phrase, dataset template) prompts per class per domain.")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--dry-run", action="store_true",
                         help="Validate cached raw features without loading CLIP or evaluating.")
     args = parser.parse_args()
 
-    datasets = DEFAULT_DATASETS if args.datasets == "all" else [name.strip() for name in args.datasets.split(",")]
+    if args.datasets in DATASET_PRESETS:
+        datasets = DATASET_PRESETS[args.datasets]
+    else:
+        datasets = [name.strip() for name in args.datasets.split(",")]
 
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -46,7 +55,7 @@ def main():
 
     run_domain_hint_templated(
         args.backbone, args.data_root, datasets,
-        batch_size=args.batch_size, max_prompts=args.max_prompts, dry_run=args.dry_run,
+        batch_size=args.batch_size, dry_run=args.dry_run,
     )
 
 

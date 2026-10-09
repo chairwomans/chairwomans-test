@@ -105,25 +105,21 @@ def _dataset_templates(dataset_name):
         raise KeyError(f"No prompt templates registered for CoOp dataset: {dataset_name}") from error
 
 
-def _domain_class_prompts(domain, class_name, dataset_templates, max_prompts):
-    combined = [
+def _domain_class_prompts(domain, class_name, dataset_templates):
+    return [
         f"{domain_phrase}, {template.format(class_name)}"
         for domain_phrase in DOMAIN_PROMPTS[domain]
         for template in dataset_templates
     ]
-    if len(combined) <= max_prompts:
-        return combined
-    stride = len(combined) / max_prompts
-    return [combined[int(index * stride)] for index in range(max_prompts)]
 
 
 @torch.no_grad()
-def build_domain_text_prototypes_templated(model, class_names, domain_names, dataset_templates, device, max_prompts=40):
+def build_domain_text_prototypes_templated(model, class_names, domain_names, dataset_templates, device):
     per_domain = []
     for domain in domain_names:
         prototypes = []
         for class_name in tqdm(class_names, desc=f"{domain} text prototypes", leave=False):
-            prompts = _domain_class_prompts(domain, class_name.replace("_", " "), dataset_templates, max_prompts)
+            prompts = _domain_class_prompts(domain, class_name.replace("_", " "), dataset_templates)
             encoded = model.encode_text(clip.tokenize(prompts, truncate=True).to(device)).float()
             encoded = F.normalize(encoded, dim=-1)
             prototypes.append(F.normalize(encoded.mean(dim=0), dim=0))
@@ -132,7 +128,7 @@ def build_domain_text_prototypes_templated(model, class_names, domain_names, dat
 
 
 def run_dataset_templated(model, data_root, backbone, dataset, device, domain_names, domain_matrix,
-                           logit_scale, batch_size, max_prompts, dry_run=False):
+                           logit_scale, batch_size, dry_run=False):
     features, items, metadata = load_cached_raw(data_root, backbone, dataset, "test", device)
     class_names, labels = build_label_space(items)
     dataset_name = metadata.get("dataset_name", dataset)
@@ -142,7 +138,7 @@ def run_dataset_templated(model, data_root, backbone, dataset, device, domain_na
 
     dataset_templates = _dataset_templates(dataset_name)
     proto_tensor = build_domain_text_prototypes_templated(
-        model, class_names, domain_names, dataset_templates, device, max_prompts
+        model, class_names, domain_names, dataset_templates, device
     )
     accuracy, correct, total = evaluate_text_only(
         features, labels, domain_matrix, proto_tensor, logit_scale, device, batch_size
@@ -156,13 +152,13 @@ def run_dataset_templated(model, data_root, backbone, dataset, device, domain_na
     }
 
 
-def run_domain_hint_templated(backbone, data_root, datasets, batch_size=512, max_prompts=40, dry_run=False):
+def run_domain_hint_templated(backbone, data_root, datasets, batch_size=512, dry_run=False):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     if dry_run:
         rows = [
             run_dataset_templated(None, data_root, backbone, dataset, device, [], None, 0.0, batch_size,
-                                   max_prompts, dry_run=True)
+                                   dry_run=True)
             for dataset in datasets
         ]
         print("\n" + "=" * 54)
@@ -181,12 +177,11 @@ def run_domain_hint_templated(backbone, data_root, datasets, batch_size=512, max
     logit_scale = model.logit_scale.exp().item()
     print("Domain prompts:", ", ".join(domain_names))
     print(f"Domain logit scale: {logit_scale:.2f}")
-    print(f"Ensemble cap per domain/class: {max_prompts}")
 
     rows = [
         run_dataset_templated(
             model, data_root, backbone, dataset, device, domain_names,
-            domain_matrix, logit_scale, batch_size, max_prompts,
+            domain_matrix, logit_scale, batch_size,
         )
         for dataset in datasets
     ]
