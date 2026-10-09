@@ -1,10 +1,8 @@
+torch
+torchvision
 numpy
-scipy
-scikit-learn
+Pillow
 tqdm
 ftfy
 regex
-pandas
-Pillow
-packaging
 PyYAML
